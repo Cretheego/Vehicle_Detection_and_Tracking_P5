@@ -41,27 +41,11 @@ class VehicleDetection():
         self.classifier = self.class_svm.classifier
         self.X_scaler = self.class_svm.X_scaler
         self.fea_extra = self.class_svm.fea_extra
-        
-    def find_cars(self, img):
-        xstart = np.int(img.shape[1] / 2)
-        xstop = img.shape[1]
-        ystart = self.ystart
-        ystop  = self.ystop
-        scale = self.scale
-        orient = self.fea_extra.orient
-        hog_channel = self.fea_extra.hog_channel
-        pix_per_cell = self.fea_extra.pix_per_cell
-        cell_per_block = self.fea_extra.cell_per_block
-        spatial_size = self.fea_extra.spatial_size
-        hist_bins = self.fea_extra.hist_bins
-        colorspace = self.fea_extra.color_space
-        
-        print(np.shape(img))    
-        draw_img = np.copy(img)
+    
+    def hog_box(self,scale,ctrans_tosearch,pix_per_cell,orient,cell_per_block,hog_channel,\
+                            hist_bins,spatial_size,window=64,cells_per_step=2):
+        # Extract hog features once and search box for vehicle 
         boxes = []
-        img_tosearch = img[ystart:ystop,xstart:xstop,:]
-
-        ctrans_tosearch = uf.convert_color(img_tosearch, colorspace)
         if scale != 1:
             imshape = ctrans_tosearch.shape
             ctrans_tosearch = cv2.resize(ctrans_tosearch, (np.int(imshape[1]/scale), np.int(imshape[0]/scale)))
@@ -73,10 +57,7 @@ class VehicleDetection():
         nxblocks = (ch1.shape[1] // pix_per_cell)-1
         nyblocks = (ch1.shape[0] // pix_per_cell)-1 
         nfeat_per_block = orient*cell_per_block**2
-        # 64 was the orginal sampling rate, with 8 cells and 8 pix per cell
-        window = 64
         nblocks_per_window = (window // pix_per_cell)-1 
-        cells_per_step = 2  # Instead of overlap, define how many cells to step
         nxsteps = (nxblocks - nblocks_per_window) // cells_per_step
         nysteps = (nyblocks - nblocks_per_window) // cells_per_step
         # Compute individual channel HOG features for the entire image
@@ -110,6 +91,7 @@ class VehicleDetection():
                   
                 # Scale features and make a prediction
                 test_features = self.X_scaler.transform(np.hstack((spatial_features, hist_features, hog_features)).reshape(1, -1))    
+                #test_features = X_scaler.transform(np.hstack((shape_feat, hist_feat)).reshape(1, -1))    
                 test_prediction = self.classifier.predict(test_features)
                 
                 if test_prediction == 1:
@@ -118,9 +100,30 @@ class VehicleDetection():
                     win_draw = np.int(window*scale)
                     boxes.append(((xbox_left + xstart, ytop_draw + ystart),\
                                   (xbox_left + win_draw + xstart, ytop_draw + win_draw + ystart)))
-                    cv2.rectangle(draw_img,(xbox_left + xstart , ytop_draw+ystart),\
-                                  (xbox_left+win_draw + xstart,ytop_draw+win_draw+ystart),(0,0,255),2) 
+        return boxes
         
+    def find_cars(self, img):
+        xstart = np.int(img.shape[1] / 2)
+        xstop = img.shape[1]
+        ystart = self.ystart
+        ystop  = self.ystop
+        scale = self.scale
+        orient = self.fea_extra.orient
+        hog_channel = self.fea_extra.hog_channel
+        pix_per_cell = self.fea_extra.pix_per_cell
+        cell_per_block = self.fea_extra.cell_per_block
+        spatial_size = self.fea_extra.spatial_size
+        hist_bins = self.fea_extra.hist_bins
+        colorspace = self.fea_extra.color_space
+        
+        print(np.shape(img))    
+        draw_img = np.copy(img)
+        boxes = []
+        img_tosearch = img[ystart:ystop,xstart:xstop,:]
+
+        ctrans_tosearch = uf.convert_color(img_tosearch, colorspace)
+        boxes = self.hog_box(scale,ctrans_tosearch,pix_per_cell,orient,cell_per_block,hog_channel,\
+                            hist_bins,spatial_size,window=64,cells_per_step=2)       
         draw_img = self.detec_false_positive(img, boxes)
         return draw_img
         
